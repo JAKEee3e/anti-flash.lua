@@ -1,0 +1,556 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local PlayerService = game:GetService("Players")
+
+-- Constants
+local RADAR_CONFIG = {
+    Size = 200,
+    Range = 150, -- Increase base range to match detection range
+    RefreshRate = 1/60,
+    Colors = {
+        Background = Color3.fromRGB(10, 12, 18), -- Darker, more professional background
+        BackgroundTransparency = 0.1, -- More solid look
+        Border = Color3.fromRGB(255, 255, 255),
+        BorderTransparency = 0.85, -- Subtler border
+        Player = Color3.fromRGB(255, 255, 255),
+        Enemy = Color3.fromRGB(255, 40, 40), -- Brighter red
+        Teammate = Color3.fromRGB(40, 255, 70), -- Brighter green
+        Cardinal = Color3.fromRGB(255, 255, 255),
+        CardinalTransparency = 0.7,
+        RangeRings = Color3.fromRGB(255, 255, 255),
+        Glow = Color3.fromRGB(255, 255, 255)
+    },
+    Arrow = {
+        Size = 10,
+        Color = Color3.fromRGB(255, 255, 255),
+        Transparency = 0.3
+    },
+    Scale = {
+        ShowRangeRings = true,
+        RingCount = 3, -- More rings for better distance reference
+        RingText = false,
+        RadarScale = 0.95 -- Increased scale factor
+    },
+    UI = {
+        CornerRadius = UDim.new(1, 0), -- Make it fully circular
+        StrokeThickness = 0.6, -- Thinner stroke
+        GlowIntensity = 0.6, -- Reduced from 0.8
+        GlowTransparency = 0.9, -- Increased from 0.85
+        BlurEffect = true,
+        BlurSize = 15
+    },
+    Avatar = {
+        Size = 10, -- Smaller avatar
+        BorderRadius = 1,
+        BackgroundTransparency = 1,
+        StrokeColor = Color3.fromRGB(255, 255, 255),
+        StrokeTransparency = 0.6,
+        StrokeThickness = 0.8,
+        ZIndex = 10 -- Add this to keep avatar on top
+    },
+    TeamColors = {
+        Friendly = Color3.fromRGB(0, 255, 0), -- Bright green
+        Enemy = Color3.fromRGB(255, 0, 0), -- Bright red
+        StrokeThickness = 1.5
+    },
+    Cardinal = {
+        LineLength = 10, -- Length of direction lines
+        LineThickness = 1.2,
+        Color = Color3.fromRGB(255, 255, 255),
+        Transparency = 0.7
+    },
+    Glow = {
+        Layers = 8, -- More glow layers
+        BaseSize = 1.01,
+        MaxSize = 1.035,
+        Color = Color3.fromRGB(255, 255, 255),
+        BaseTransparency = 0.85,
+        TransparencyStep = 0.02
+    },
+    Animation = {
+        DotAppearDuration = 0.2, -- Slightly faster appear animation
+        SmoothUpdateRate = 1/144 -- Smoother updates
+    },
+    Dots = {
+        EnemySize = 5.6, -- Bigger enemy dots
+        TeammateSize = 4.6 -- Keep teammate dots same size
+    },
+    Features = {
+        ShowHealth = true,
+        SoundEnabled = true,
+        PriorityTargets = true,
+        DetectionRange = 150 -- Larger range option
+    },
+    Audio = {
+        DetectionSound = "rbxassetid://6768783832",
+        Volume = 0.3
+    },
+    Indicators = {
+        HealthColor = {
+            High = Color3.fromRGB(0, 255, 0),
+            Medium = Color3.fromRGB(255, 255, 0),
+            Low = Color3.fromRGB(255, 0, 0)
+        },
+        PriorityColor = Color3.fromRGB(255, 150, 0),
+        TextSize = 8 -- Smaller text
+    }
+}
+
+local PriorityPlayers = {}
+
+local DetectionSound = Instance.new("Sound")
+DetectionSound.SoundId = RADAR_CONFIG.Audio.DetectionSound
+DetectionSound.Volume = RADAR_CONFIG.Audio.Volume
+
+local function Lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+local function CreateRadar()
+    local RadarGui = Instance.new("ScreenGui")
+    RadarGui.Name = "RadarGui"
+    RadarGui.ResetOnSpawn = false -- Prevent disappearing on death
+    
+    -- Try to parent to CoreGui for persistence
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(RadarGui)
+            RadarGui.Parent = game:GetService("CoreGui")
+        else
+            RadarGui.Parent = game:GetService("CoreGui")
+        end
+    end)
+
+    -- Main radar frame
+    local RadarFrame = Instance.new("Frame")
+    RadarFrame.Name = "RadarFrame"
+    RadarFrame.Size = UDim2.new(0, RADAR_CONFIG.Size, 0, RADAR_CONFIG.Size)
+    RadarFrame.Position = UDim2.new(1, -RADAR_CONFIG.Size - 20, 0, 20)
+    RadarFrame.BackgroundColor3 = RADAR_CONFIG.Colors.Background
+    RadarFrame.BackgroundTransparency = RADAR_CONFIG.Colors.BackgroundTransparency
+    RadarFrame.BorderSizePixel = 0
+    RadarFrame.Parent = RadarGui
+
+    -- Make frame circular
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = RADAR_CONFIG.UI.CornerRadius
+    Corner.Parent = RadarFrame
+
+    -- Replace outer glow implementation
+    local glowContainer = Instance.new("Frame")
+    glowContainer.Name = "GlowContainer"
+    glowContainer.BackgroundTransparency = 1
+    glowContainer.Size = UDim2.new(1, 0, 1, 0)
+    glowContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+    glowContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+    
+    -- Create multiple glow layers
+    for i = 1, RADAR_CONFIG.Glow.Layers do
+        local size = RADAR_CONFIG.Glow.BaseSize + 
+            ((RADAR_CONFIG.Glow.MaxSize - RADAR_CONFIG.Glow.BaseSize) * (i / RADAR_CONFIG.Glow.Layers))
+        
+        local glowLayer = Instance.new("Frame")
+        glowLayer.BackgroundTransparency = 1
+        glowLayer.Size = UDim2.new(size, 0, size, 0)
+        glowLayer.Position = UDim2.new(0.5, 0, 0.5, 0)
+        glowLayer.AnchorPoint = Vector2.new(0.5, 0.5)
+        
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = RADAR_CONFIG.Glow.Color
+        stroke.Thickness = 1.5
+        stroke.Transparency = RADAR_CONFIG.Glow.BaseTransparency + 
+            (RADAR_CONFIG.Glow.TransparencyStep * (i - 1))
+        stroke.Parent = glowLayer
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = glowLayer
+        
+        glowLayer.Parent = glowContainer
+    end
+    
+    glowContainer.Parent = RadarFrame
+
+    -- Add border
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = RADAR_CONFIG.Colors.Border
+    Stroke.Thickness = RADAR_CONFIG.UI.StrokeThickness
+    Stroke.Transparency = RADAR_CONFIG.Colors.BorderTransparency
+    Stroke.Parent = RadarFrame
+
+    -- Add rounded corners
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = RADAR_CONFIG.UI.CornerRadius
+    Corner.Parent = RadarFrame
+
+    -- Add border
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = RADAR_CONFIG.Colors.Border
+    Stroke.Thickness = RADAR_CONFIG.UI.StrokeThickness
+    Stroke.Parent = RadarFrame
+
+    -- Add blur effect if enabled
+    if RADAR_CONFIG.UI.BlurEffect then
+        local blur = Instance.new("BlurEffect")
+        blur.Size = 10
+        blur.Parent = RadarFrame
+    end
+
+    -- Add glow effect
+    if RADAR_CONFIG.UI.Glow then
+        local glowFrame = Instance.new("Frame")
+        glowFrame.BackgroundTransparency = 0.9
+        glowFrame.Size = UDim2.new(1, 20, 1, 20)
+        glowFrame.Position = UDim2.new(0, -10, 0, -10)
+        glowFrame.BackgroundColor3 = RADAR_CONFIG.Colors.Accent
+        glowFrame.ZIndex = -1
+        
+        local glowCorner = Instance.new("UICorner")
+        glowCorner.CornerRadius = UDim.new(0, 12)
+        glowCorner.Parent = glowFrame
+        
+        local glowGradient = Instance.new("UIGradient")
+        glowGradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.8),
+            NumberSequenceKeypoint.new(0.5, 0.9),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+        glowGradient.Parent = glowFrame
+        
+        glowFrame.Parent = RadarFrame
+    end
+
+    -- Remove grid lines creation code
+
+    -- Replace the cardinal text creation with lines
+    local cardinalDirections = {
+        {rotation = 0, position = UDim2.new(0.5, 0, 0, 0)},    -- North
+        {rotation = 180, position = UDim2.new(0.5, 0, 1, 0)},  -- South
+        {rotation = 90, position = UDim2.new(1, 0, 0.5, 0)},   -- East
+        {rotation = 270, position = UDim2.new(0, 0, 0.5, 0)}   -- West
+    }
+
+    for _, dir in pairs(cardinalDirections) do
+        local line = Instance.new("Frame")
+        line.Name = "CardinalLine"
+        line.Size = UDim2.new(0, 1, 0, RADAR_CONFIG.Cardinal.LineLength)
+        line.BorderSizePixel = 0
+        line.BackgroundColor3 = RADAR_CONFIG.Cardinal.Color
+        line.BackgroundTransparency = RADAR_CONFIG.Cardinal.Transparency
+        line.Position = dir.position
+        line.AnchorPoint = Vector2.new(0.5, 0.5)
+        line.Rotation = dir.rotation
+        
+        -- Make the line thicker using UIScale
+        local scale = Instance.new("UIScale")
+        scale.Scale = RADAR_CONFIG.Cardinal.LineThickness
+        scale.Parent = line
+        
+        line.Parent = RadarFrame
+    end
+
+    -- Remove all arrow-related code (triangle, glow, etc.)
+
+    -- Replace PlayerDot with Avatar ImageLabel
+    local PlayerAvatar = Instance.new("ImageLabel")
+    PlayerAvatar.Name = "PlayerAvatar"
+    PlayerAvatar.Size = UDim2.new(0, RADAR_CONFIG.Avatar.Size, 0, RADAR_CONFIG.Avatar.Size)
+    PlayerAvatar.BackgroundTransparency = RADAR_CONFIG.Avatar.BackgroundTransparency
+    PlayerAvatar.BorderSizePixel = 0
+    PlayerAvatar.AnchorPoint = Vector2.new(0.5, 0.5)
+    PlayerAvatar.Position = UDim2.new(0.5, 0, 0.5, 0) -- Simplified positioning
+    PlayerAvatar.ZIndex = RADAR_CONFIG.Avatar.ZIndex -- Keep on top
+    PlayerAvatar.Parent = RadarFrame
+
+    -- Make avatar circular
+    local AvatarCorner = Instance.new("UICorner")
+    AvatarCorner.CornerRadius = UDim.new(1, 0)
+    AvatarCorner.Parent = PlayerAvatar
+
+    -- Add white circular stroke around avatar
+    local AvatarStroke = Instance.new("UIStroke")
+    AvatarStroke.Color = RADAR_CONFIG.Avatar.StrokeColor
+    AvatarStroke.Thickness = RADAR_CONFIG.Avatar.StrokeThickness
+    AvatarStroke.Transparency = RADAR_CONFIG.Avatar.StrokeTransparency
+    AvatarStroke.Parent = PlayerAvatar
+
+    -- Function to update avatar thumbnail
+    local function UpdateAvatarThumbnail()
+        local player = PlayerService.LocalPlayer
+        if player and player.Character then
+            task.spawn(function()
+                local thumbnail = Players:GetUserThumbnailAsync(
+                    player.UserId,
+                    Enum.ThumbnailType.AvatarBust, -- Use bust shot instead of headshot
+                    Enum.ThumbnailSize.Size420x420
+                )
+                PlayerAvatar.Image = thumbnail
+            end)
+        end
+    end
+
+    -- Update thumbnail when radar is created
+    UpdateAvatarThumbnail()
+
+    -- Update thumbnail periodically in case of character appearance changes
+    spawn(function()
+        while wait(30) do -- Update every 30 seconds
+            pcall(UpdateAvatarThumbnail)
+        end
+    end)
+
+    -- Add range rings
+    if RADAR_CONFIG.Scale.ShowRangeRings then
+        for i = 1, RADAR_CONFIG.Scale.RingCount do
+            local ringContainer = Instance.new("Frame")
+            ringContainer.Name = "RangeRing_" .. i
+            local size = (i / RADAR_CONFIG.Scale.RingCount) * RADAR_CONFIG.Size
+            ringContainer.Size = UDim2.new(0, size, 0, size)
+            ringContainer.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
+            ringContainer.BackgroundTransparency = 1
+            ringContainer.Parent = RadarFrame
+            
+            local ringStroke = Instance.new("UIStroke")
+            ringStroke.Color = RADAR_CONFIG.Colors.RangeRings
+            ringStroke.Transparency = 0.85
+            ringStroke.Thickness = 1
+            ringStroke.Parent = ringContainer
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1, 0)
+            corner.Parent = ringContainer
+        end
+    end
+
+    -- Dot template for enemies/teammates
+    local function AddDotHover(dot, player)
+        dot.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseEnter then
+                -- Create hover label
+                local hoverLabel = Instance.new("TextLabel")
+                hoverLabel.Name = "HoverLabel"
+                hoverLabel.Size = UDim2.new(0, 100, 0, 20)
+                hoverLabel.Position = UDim2.new(0.5, 10, 0.5, -10)
+                hoverLabel.BackgroundColor3 = RADAR_CONFIG.Colors.Background
+                hoverLabel.BackgroundTransparency = 0.2
+                hoverLabel.TextColor3 = RADAR_CONFIG.Colors.Cardinal
+                hoverLabel.Text = player.Name
+                hoverLabel.Font = Enum.Font.GothamBold
+                hoverLabel.TextSize = 12
+                hoverLabel.Parent = dot
+
+                local corner = Instance.new("UICorner")
+                corner.CornerRadius = UDim.new(0, 4)
+                corner.Parent = hoverLabel
+            end
+        end)
+
+        dot.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseLeave then
+                local hoverLabel = dot:FindFirstChild("HoverLabel")
+                if hoverLabel then hoverLabel:Destroy() end
+            end
+        end)
+    end
+
+    local function CreateDot(player)
+        local LocalPlayer = Players.LocalPlayer
+        local isTeammate = player.Team and player.Team == LocalPlayer.Team
+        local color = isTeammate and RADAR_CONFIG.TeamColors.Friendly or RADAR_CONFIG.TeamColors.Enemy
+        local dotSize = isTeammate and RADAR_CONFIG.Dots.TeammateSize or RADAR_CONFIG.Dots.EnemySize
+
+        local dot = Instance.new("Frame")
+        dot.Size = UDim2.new(0, dotSize, 0, dotSize) -- Set size directly, no animation
+        dot.BackgroundTransparency = 0
+        dot.BackgroundColor3 = color
+        dot.BorderSizePixel = 0
+        dot.AnchorPoint = Vector2.new(0.5, 0.5)
+        
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = dot
+
+        AddDotHover(dot, player)
+
+        -- Add health indicator
+        if RADAR_CONFIG.Features.ShowHealth then
+            local health = player.Character:FindFirstChild("Humanoid")
+            if health then
+                local healthPercentage = health.Health / health.MaxHealth
+                local healthColor = RADAR_CONFIG.Indicators.HealthColor.High
+                
+                if healthPercentage < 0.3 then
+                    healthColor = RADAR_CONFIG.Indicators.HealthColor.Low
+                elseif healthPercentage < 0.6 then
+                    healthColor = RADAR_CONFIG.Indicators.HealthColor.Medium
+                end
+                
+                local healthBar = Instance.new("Frame")
+                healthBar.Size = UDim2.new(1, 0, 0.2, 0)
+                healthBar.Position = UDim2.new(0, 0, -0.4, 0)
+                healthBar.BackgroundColor3 = healthColor
+                healthBar.BackgroundTransparency = 0.3
+                healthBar.BorderSizePixel = 0
+                healthBar.Parent = dot
+            end
+        end
+
+        -- Add priority target marking
+        if RADAR_CONFIG.Features.PriorityTargets then
+            dot.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton2 then
+                    PriorityPlayers[player.UserId] = not PriorityPlayers[player.UserId]
+                    if PriorityPlayers[player.UserId] then
+                        dot.BackgroundColor3 = RADAR_CONFIG.Indicators.PriorityColor
+                    else
+                        dot.BackgroundColor3 = color
+                    end
+                end
+            end)
+        end
+
+        return dot
+    end
+
+    local detectedPlayers = {}
+    local function CheckNewDetection(player)
+        if not detectedPlayers[player.UserId] and RADAR_CONFIG.Features.SoundEnabled then
+            detectedPlayers[player.UserId] = true
+            DetectionSound:Play()
+        end
+    end
+
+    -- Update function
+    local function UpdateRadar()
+        local LocalPlayer = Players.LocalPlayer
+        local Character = LocalPlayer.Character
+        if not Character then return end
+
+        local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not HumanoidRootPart then return end
+
+        -- Remove arrow rotation code
+
+        -- Clear old dots
+        for _, child in pairs(RadarFrame:GetChildren()) do
+            if child.Name == "EnemyDot" or child.Name == "TeammateDot" then
+                child:Destroy()
+            end
+        end
+
+        -- Add player dots
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local otherHRP = player.Character:FindFirstChild("HumanoidRootPart")
+                if otherHRP then
+                    local relativePos = otherHRP.Position - HumanoidRootPart.Position
+                    local distance = relativePos.Magnitude
+
+                    -- Use actual range instead of detection range
+                    if distance <= RADAR_CONFIG.Range then
+                        local dot = CreateDot(player)
+                        dot.Name = player.Team == LocalPlayer.Team and "TeammateDot" or "EnemyDot"
+                        
+                        -- Simplified position calculation
+                        local x = (relativePos.X / RADAR_CONFIG.Range) * (RADAR_CONFIG.Size/2 * RADAR_CONFIG.Scale.RadarScale)
+                        local z = (relativePos.Z / RADAR_CONFIG.Range) * (RADAR_CONFIG.Size/2 * RADAR_CONFIG.Scale.RadarScale)
+                        
+                        -- Clamp to circle if needed
+                        local maxRadius = (RADAR_CONFIG.Size/2) * 0.95 -- 95% of radius to ensure dots stay inside
+                        local magnitude = math.sqrt(x*x + z*z)
+                        if magnitude > maxRadius then
+                            local scale = maxRadius / magnitude
+                            x = x * scale
+                            z = z * scale
+                        end
+                        
+                        dot.Position = UDim2.new(0.5, x, 0.5, -z)
+                        dot.Parent = RadarFrame
+
+                        -- Check for new detection
+                        CheckNewDetection(player)
+                    end
+                end
+            end
+        end
+
+        -- Smooth dot movement
+        for _, dot in pairs(RadarFrame:GetChildren()) do
+            if dot:IsA("Frame") and (dot.Name == "EnemyDot" or dot.Name == "TeammateDot") then
+                local targetPos = dot.Position
+                local currentPos = dot.Position
+                
+                -- Smooth lerp to target position
+                TweenService:Create(dot, TweenInfo.new(
+                    RADAR_CONFIG.Animation.SmoothUpdateRate,
+                    Enum.EasingStyle.Linear
+                ), {
+                    Position = targetPos
+                }):Play()
+            end
+        end
+    end
+
+    -- Increase update frequency for smoother movement
+    RunService.RenderStepped:Connect(UpdateRadar)
+
+    -- Make radar draggable
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+
+    RadarFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = RadarFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    RadarFrame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            RadarFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    return RadarGui
+end
+
+-- Initialize
+local radar = CreateRadar()
+
+-- Add keybind to toggle
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        radar.Enabled = not radar.Enabled
+    end
+end)
+
+-- Add configuration UI toggle
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.RightAlt then
+        -- Add configuration UI creation here
+        -- This would include sliders for range, checkboxes for features, etc.
+    end
+end)6
