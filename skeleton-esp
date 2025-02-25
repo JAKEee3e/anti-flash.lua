@@ -219,3 +219,13 @@ game:BindToClose(function()
         destroySkeleton()
     end
 end)
+
+-- Function to unload the ESP script
+local function unloadESP()
+    for _, destroySkeleton in pairs(skeletonConnections) do
+        destroySkeleton()
+    end
+    skeletonConnections = {}
+end
+
+return unloadESP
