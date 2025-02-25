@@ -1,0 +1,121 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- 6 Settings
+local AimbotSettings = {
+    Enabled = false,
+    TeamCheck = true,
+    VisibilityCheck = false,
+    TargetPart = "Head",
+    FOV = 100,
+    MinFOV = 50,
+    MaxFOV = 150,
+    PredictionMultiplier = 0,
+    MaxDistance = 1000,
+}
+
+-- FOV Circle
+local CircleDrawing = Drawing.new("Circle")
+CircleDrawing.Thickness = 1
+CircleDrawing.NumSides = 30
+CircleDrawing.Radius = AimbotSettings.FOV
+CircleDrawing.Filled = false
+CircleDrawing.Visible = true
+CircleDrawing.Color = Color3.fromRGB(255, 255, 255)
+
+-- Optimization
+local WorldToViewportPoint = Camera.WorldToViewportPoint
+local GetMouseLocation = UserInputService.GetMouseLocation
+local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed
+local MouseButton2 = Enum.UserInputType.MouseButton2
+
+-- Visibility Check Function
+local function IsVisible(position, ignoreList)
+    return #Camera:GetPartsObscuringTarget({position}, ignoreList) == 0
+end
+
+-- Improved Closest Player Finder
+local function GetClosestPlayer()
+    local closest = nil
+    local closestDistance = math.huge
+    local mousePos = GetMouseLocation(UserInputService)
+
+    for _, player in pairs(Players:GetPlayers()) do
+        -- Basic filters
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        
+        -- Team Check
+        if AimbotSettings.TeamCheck and player.Team == LocalPlayer.Team then
+            continue
+        end
+
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        local targetPart = player.Character:FindFirstChild(AimbotSettings.TargetPart)
+        
+        if humanoid and humanoid.Health > 0 and targetPart then
+            -- Distance Check
+            local distance = (targetPart.Position - Camera.CFrame.Position).Magnitude
+            if distance > AimbotSettings.MaxDistance then continue end
+
+            -- Visibility Check
+            if AimbotSettings.VisibilityCheck then
+                local ignoreList = {Camera, LocalPlayer.Character, player.Character}
+                if not IsVisible(targetPart.Position, ignoreList) then
+                    continue
+                end
+            end
+
+            -- FOV Check
+            local screenPos, onScreen = WorldToViewportPoint(Camera, targetPart.Position)
+            if onScreen then
+                local fovDistance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                if fovDistance < closestDistance and fovDistance <= AimbotSettings.FOV then
+                    closest = targetPart
+                    closestDistance = fovDistance
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Main loop
+RunService.Heartbeat:Connect(function()
+    -- Update right-click state
+    AimbotSettings.Enabled = IsMouseButtonPressed(UserInputService, MouseButton2)
+    
+    if AimbotSettings.Enabled then
+        local target = GetClosestPlayer()
+        if target then
+            -- Instant snap aiming
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    end
+    
+    -- Update FOV circle
+    CircleDrawing.Position = GetMouseLocation(UserInputService)
+    CircleDrawing.Radius = AimbotSettings.FOV
+end)
+
+-- Toggle team check with P key
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        AimbotSettings.TeamCheck = not AimbotSettings.TeamCheck
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Team Check",
+            Text = AimbotSettings.TeamCheck and "ENABLED" or "DISABLED",
+            Duration = 1
+        })
+    end
+end)
+
+-- Initial notification
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Aimbot Active",
+    Text = "Hold RIGHT CLICK to aim\nP - Toggle Team Check",
+    Duration = 5
+})
