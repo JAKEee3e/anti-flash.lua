@@ -1,189 +1,221 @@
--- Services
-local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local Workspace, RunService, Players, CoreGui, Lighting = cloneref(game:GetService("Workspace")), cloneref(game:GetService("RunService")), cloneref(game:GetService("Players")), game:GetService("CoreGui"), cloneref(game:GetService("Lighting"))
 
--- Variables
-local features = {
-    { name = "Anti-Flash", scriptUrl = "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/anti-flash" },
-    { name = "Skeleton ESP", scriptUrl = "https://raw.githubusercontent.com/JAKEee3e/skeleton-esp.lua/main/skeleton-esp" },
-    { name = "ESP", scriptUrl = "https://raw.githubusercontent.com/JAKEee3e/esp.lua/main/esp" },
-    { name = "Radar", scriptUrl = "https://raw.githubusercontent.com/JAKEee3e/radar.lua/main/radar" },
-    { name = "Aimbot", scriptUrl = "https://raw.githubusercontent.com/JAKEee3e/aimbot.lua/main/aimbot" }
+-- Add RGB cycling function at the top
+local function CreateRGB()
+    local rgb = {}
+    rgb.r = 255
+    rgb.g = 0
+    rgb.b = 0
+    rgb.changing = 1
+    
+    return function()
+        if rgb.changing == 1 then
+            rgb.g = rgb.g + 5
+            if rgb.g >= 255 then
+                rgb.changing = 2
+            end
+        elseif rgb.changing == 2 then
+            rgb.r = rgb.r - 5
+            if rgb.r <= 0 then
+                rgb.changing = 3
+            end
+        elseif rgb.changing == 3 then
+            rgb.b = rgb.b + 5
+            if rgb.b >= 255 then
+                rgb.changing = 4
+            end
+        elseif rgb.changing == 4 then
+            rgb.g = rgb.g - 5
+            if rgb.g <= 0 then
+                rgb.changing = 5
+            end
+        elseif rgb.changing == 5 then
+            rgb.r = rgb.r + 5
+            if rgb.r >= 255 then
+                rgb.changing = 6
+            end
+        elseif rgb.changing == 6 then
+            rgb.b = rgb.b - 5
+            if rgb.b <= 0 then
+                rgb.changing = 1
+            end
+        end
+        return Color3.fromRGB(rgb.r, rgb.g, rgb.b)
+    end
+end
+
+local GetRGB = CreateRGB()
+
+local ESP = {
+    Enabled = true,
+    TeamCheck = true,
+    MaxDistance = 10000,
+    FontSize = 13,
+    FadeOut = {
+        OnDistance = true,
+        OnDeath = false,
+        OnLeave = false,
+    },
+    Drawing = {
+        Skeleton = {
+            Enabled = true, -- Enable/disable skeleton ESP
+            Color = Color3.fromRGB(255, 0, 0), -- Color of the skeleton lines
+            Thickness = 1, -- Thickness of the skeleton lines
+        },
+    };
+    Connections = {
+        RunService = RunService;
+    };
 }
 
-local selectedFeatureIndex = 1
-local guiVisible = true
-local featureStates = {}
-local featureScripts = {}
+-- Def & Vars
+local Euphoria = ESP.Connections;
+local lplayer = Players.LocalPlayer;
+local camera = game.Workspace.CurrentCamera;
+local skeletonConnections = {}
 
--- Initialize feature states
-for i = 1, #features do
-    featureStates[i] = false
-    featureScripts[i] = nil
-end
+-- Skeleton ESP
+local function CreateSkeleton(character, player)
+    local skeleton = {}
+    local connections = {}
 
--- Create GUI
-local screenGui = Instance.new("ScreenGui")
-local frame = Instance.new("Frame")
-local featureLabels = {}
+    -- Define bone connections
+    local boneConnections = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"},
+    }
 
--- Set GUI properties
-screenGui.Name = "FeatureMenu"
-screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-
-frame.Name = "MainFrame"
-frame.Size = UDim2.new(0.12, 0, 0.25, 0)
-frame.Position = UDim2.new(0.425, 0, 0.375, 0)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BorderSizePixel = 2
-frame.BorderColor3 = Color3.fromRGB(60, 60, 60)
-frame.Parent = screenGui
-
--- Create title label
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
-titleLabel.Position = UDim2.new(0, 0, -0.15, 0)
-titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Text = "Feature Menu"
-titleLabel.TextSize = 16
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.Parent = frame
-
--- Create feature labels
-for i, feature in ipairs(features) do
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0.15, 0)
-    label.Position = UDim2.new(0, 0, (i-1) * 0.2, 0)
-    label.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Text = feature.name
-    label.TextSize = 14
-    label.Font = Enum.Font.SourceSans
-    label.Parent = frame
-    table.insert(featureLabels, label)
-end
-
--- Functions
-local function updateSelection()
-    for i, label in ipairs(featureLabels) do
-        label.BackgroundColor3 = i == selectedFeatureIndex and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(45, 45, 45)
-        label.TextColor3 = featureStates[i] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
+    -- Create lines for each bone connection
+    for _, connection in pairs(boneConnections) do
+        local part1, part2 = connection[1], connection[2]
+        local line = Drawing.new("Line")
+        line.Visible = false
+        line.Color = ESP.Drawing.Skeleton.Color
+        line.Thickness = ESP.Drawing.Skeleton.Thickness
+        skeleton[part1 .. part2] = line
     end
+
+    -- Function to update skeleton
+    local function UpdateSkeleton()
+        -- Team check
+        if ESP.TeamCheck and player.Team == lplayer.Team then
+            for _, line in pairs(skeleton) do
+                line.Visible = false
+            end
+            return
+        end
+
+        -- Health check
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            for _, line in pairs(skeleton) do
+                line.Visible = false
+            end
+            return
+        end
+
+        -- Update skeleton lines
+        for _, connection in pairs(boneConnections) do
+            local part1, part2 = connection[1], connection[2]
+            local line = skeleton[part1 .. part2]
+            local part1Instance = character:FindFirstChild(part1)
+            local part2Instance = character:FindFirstChild(part2)
+
+            if part1Instance and part2Instance then
+                local pos1, onScreen1 = camera:WorldToViewportPoint(part1Instance.Position)
+                local pos2, onScreen2 = camera:WorldToViewportPoint(part2Instance.Position)
+
+                if onScreen1 and onScreen2 then
+                    line.From = Vector2.new(pos1.X, pos1.Y)
+                    line.To = Vector2.new(pos2.X, pos2.Y)
+                    line.Visible = ESP.Drawing.Skeleton.Enabled
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    end
+
+    -- Connect to RenderStepped to update skeleton
+    local connection = RunService.RenderStepped:Connect(UpdateSkeleton)
+    table.insert(connections, connection)
+
+    -- Cleanup function
+    local function DestroySkeleton()
+        for _, line in pairs(skeleton) do
+            line:Remove()
+        end
+        for _, conn in pairs(connections) do
+            conn:Disconnect()
+        end
+    end
+
+    return DestroySkeleton
 end
 
-local function toggleGuiVisibility()
-    guiVisible = not guiVisible
-    screenGui.Enabled = guiVisible
-end
-
--- Error Handler
-local function safeLoadstring(url, featureName)
-    local success, result = pcall(function()
-        return game:HttpGet(url)
+-- Add skeleton ESP for a player
+local function AddSkeletonESP(player)
+    if player.Character then
+        skeletonConnections[player] = CreateSkeleton(player.Character, player)
+    end
+    player.CharacterAdded:Connect(function(character)
+        if skeletonConnections[player] then
+            skeletonConnections[player]() -- Clean up existing skeleton
+        end
+        skeletonConnections[player] = CreateSkeleton(character, player)
     end)
-    
-    if success then
-        local loadSuccess, loadResult = pcall(loadstring, result)
-        if loadSuccess then
-            return loadResult
-        else
-            warn(string.format("Failed to load %s script: %s", featureName, tostring(loadResult)))
+    player.CharacterRemoving:Connect(function()
+        if skeletonConnections[player] then
+            skeletonConnections[player]() -- Clean up skeleton when character is removed
+            skeletonConnections[player] = nil
         end
-    else
-        warn(string.format("Failed to fetch %s script: %s", featureName, tostring(result)))
-    end
-    return nil
+    end)
 end
 
--- Unload feature script
-local function unloadFeatureScript(index)
-    if featureScripts[index] then
-        local script = featureScripts[index]
-        if typeof(script) == "function" then
-            local success, err = pcall(script)
-            if not success then
-                warn(string.format("Failed to unload %s script: %s", features[index].name, tostring(err)))
-            end
-        end
-        featureScripts[index] = nil
+-- Remove skeleton ESP for a player
+local function RemoveSkeletonESP(player)
+    if skeletonConnections[player] then
+        skeletonConnections[player]()
+        skeletonConnections[player] = nil
     end
 end
 
--- Toggle feature
-local function toggleFeature(index)
-    featureStates[index] = not featureStates[index]
-    if featureStates[index] then
-        local script = safeLoadstring(features[index].scriptUrl, features[index].name)
-        if script then
-            featureScripts[index] = script
-            local success, err = pcall(script)
-            if not success then
-                warn(string.format("Failed to execute %s script: %s", features[index].name, tostring(err)))
-            end
-        end
-    else
-        unloadFeatureScript(index)
+-- Initialize skeleton ESP for existing players
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= lplayer then
+        AddSkeletonESP(player)
     end
-    updateSelection()
 end
 
--- Input Handlers
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Up then
-        selectedFeatureIndex = (selectedFeatureIndex - 2) % #features + 1
-        updateSelection()
-    elseif input.KeyCode == Enum.KeyCode.Down then
-        selectedFeatureIndex = selectedFeatureIndex % #features + 1
-        updateSelection()
-    elseif input.KeyCode == Enum.KeyCode.Return then
-        toggleFeature(selectedFeatureIndex)
-    elseif input.KeyCode == Enum.KeyCode.RightShift then
-        toggleGuiVisibility()
-    elseif input.KeyCode == Enum.KeyCode.U then
-        unloadScripts()
+-- Initialize skeleton ESP for new players
+Players.PlayerAdded:Connect(function(player)
+    if player ~= lplayer then
+        AddSkeletonESP(player)
     end
 end)
 
--- Instructions Label
-local instructionsLabel = Instance.new("TextLabel")
-instructionsLabel.Size = UDim2.new(1, 0, 0.15, 0)
-instructionsLabel.Position = UDim2.new(0, 0, 1.05, 0)
-instructionsLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-instructionsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-instructionsLabel.Text = "Up/Down: Select | Enter: Toggle | RShift: Hide"
-instructionsLabel.TextSize = 12
-instructionsLabel.Font = Enum.Font.SourceSans
-instructionsLabel.Parent = frame
+-- Cleanup skeleton ESP when player leaves
+Players.PlayerRemoving:Connect(function(player)
+    RemoveSkeletonESP(player)
+end)
 
--- Initial update
-updateSelection()
-
--- Welcome message
-StarterGui:SetCore("SendNotification", {
-    Title = "Menu Loaded",
-    Text = "Use Up/Down to select, Enter to toggle, RShift to hide",
-    Duration = 5
-})
-
--- Function to unload all scripts
-local function unloadScripts()
-    for i = 1, #features do
-        if featureStates[i] then
-            unloadFeatureScript(i)
-            featureStates[i] = false
-        end
+-- Cleanup all skeleton ESP instances when the script is stopped
+game:BindToClose(function()
+    for _, destroySkeleton in pairs(skeletonConnections) do
+        destroySkeleton()
     end
-
-    -- Update the GUI to reflect the unloaded states
-    updateSelection()
-
-    -- Notify the user
-    StarterGui:SetCore("SendNotification", {
-        Title = "Scripts Unloaded",
-        Text = "All scripts have been unloaded.",
-        Duration = 5
-    })
-end
+end)
