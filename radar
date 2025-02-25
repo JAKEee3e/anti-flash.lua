@@ -553,4 +553,4 @@ UserInputService.InputBegan:Connect(function(input)
         -- Add configuration UI creation here
         -- This would include sliders for range, checkboxes for features, etc.
     end
-end)6
+end)
