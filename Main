@@ -1,0 +1,167 @@
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Variables
+local features = {
+    { name = "Anti-Flash" },
+    { name = "Skeleton ESP" },
+    { name = "ESP" },
+    { name = "Radar" },
+    { name = "Aimbot" }
+}
+
+local selectedFeatureIndex = 1
+local guiVisible = true
+local featureStates = {}
+
+-- Initialize feature states
+for i = 1, #features do
+    featureStates[i] = false
+end
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+local frame = Instance.new("Frame")
+local featureLabels = {}
+
+-- Set GUI properties
+screenGui.Name = "FeatureMenu"
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0.12, 0, 0.25, 0)
+frame.Position = UDim2.new(0.425, 0, 0.375, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(60, 60, 60)
+frame.Parent = screenGui
+
+-- Create title label
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
+titleLabel.Position = UDim2.new(0, 0, -0.15, 0)
+titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Text = "Feature Menu"
+titleLabel.TextSize = 16
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.Parent = frame
+
+-- Create feature labels
+for i, feature in ipairs(features) do
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0.15, 0)
+    label.Position = UDim2.new(0, 0, (i-1) * 0.2, 0)
+    label.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Text = feature.name
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSans
+    label.Parent = frame
+    table.insert(featureLabels, label)
+end
+
+-- Functions
+local function updateSelection()
+    for i, label in ipairs(featureLabels) do
+        label.BackgroundColor3 = i == selectedFeatureIndex and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(45, 45, 45)
+        label.TextColor3 = featureStates[i] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
+    end
+end
+
+local function toggleGuiVisibility()
+    guiVisible = not guiVisible
+    screenGui.Enabled = guiVisible
+end
+
+-- Error Handler
+local function safeLoadstring(url, featureName)
+    local success, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if success then
+        local loadSuccess, loadResult = pcall(loadstring, result)
+        if loadSuccess and loadResult then
+            pcall(loadResult)
+        else
+            warn(string.format("Failed to load %s script: %s", featureName, tostring(loadResult)))
+        end
+    else
+        warn(string.format("Failed to fetch %s script: %s", featureName, tostring(result)))
+    end
+end
+
+-- Input Handlers
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Up then
+        selectedFeatureIndex = (selectedFeatureIndex - 2) % #features + 1
+        updateSelection()
+    elseif input.KeyCode == Enum.KeyCode.Down then
+        selectedFeatureIndex = selectedFeatureIndex % #features + 1
+        updateSelection()
+    elseif input.KeyCode == Enum.KeyCode.Return then
+        featureStates[selectedFeatureIndex] = not featureStates[selectedFeatureIndex]
+        updateSelection()
+        
+        -- Execute the appropriate script based on selection
+        if selectedFeatureIndex == 1 and featureStates[1] then
+            -- Anti-Flash script
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/anti-flash",
+                "Anti-Flash"
+            )
+        elseif selectedFeatureIndex == 2 and featureStates[2] then
+            -- Skeleton ESP script
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/skeleton-esp",
+                "Skeleton ESP"
+            )
+        elseif selectedFeatureIndex == 3 and featureStates[3] then
+            -- No Flash Bang script
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/esP",
+                "ESP"
+            )
+        elseif selectedFeatureIndex == 4 and featureStates[4] then
+            -- No Recoil script
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/radar",
+                "Radar"
+            )
+        elseif selectedFeatureIndex == 5 and featureStates[5] then
+            -- Aimbot script
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
+                "Aimbot"
+            )
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.RightShift then
+        toggleGuiVisibility()
+    end
+end)
+
+-- Instructions Label
+local instructionsLabel = Instance.new("TextLabel")
+instructionsLabel.Size = UDim2.new(1, 0, 0.15, 0)
+instructionsLabel.Position = UDim2.new(0, 0, 1.05, 0)
+instructionsLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+instructionsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+instructionsLabel.Text = "Up/Down: Select | Enter: Toggle | RShift: Hide"
+instructionsLabel.TextSize = 12
+instructionsLabel.Font = Enum.Font.SourceSans
+instructionsLabel.Parent = frame
+
+-- Initial update
+updateSelection()
+
+-- Welcome message
+StarterGui:SetCore("SendNotification", {
+    Title = "Menu Loaded",
+    Text = "Use Up/Down to select, Enter to toggle, RShift to hide",
+    Duration = 5
+})
