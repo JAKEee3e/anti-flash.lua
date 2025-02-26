@@ -1,0 +1,33 @@
+local shouldRun = true
+
+-- Function to modify gun properties
+local function modifyGunProperties()
+    if game.Players.LocalPlayer.PlayerGui:FindFirstChild("GModule") then
+        for _, item in ipairs(game.Players.LocalPlayer.PlayerGui.GModule:GetChildren()) do
+            if item.Name ~= "Knife" and item.Name ~= "Interact" and item.Name ~= "Frag" and item:IsA("ModuleScript") and item.Name ~= "Flashbang" then
+                local s = require(item)
+
+                s.camRecoil.camRecoilUp = {0,0}
+                s.camRecoil.camRecoilTilt = {0,0}
+                s.camRecoil.camRecoilLeft = {0,0}
+                s.camRecoil.camRecoilRight = {0,0}
+                s.Ammo = 100
+                s.StoredAmmo = 1000
+
+                -- Debugging prints
+                print("Modified camRecoil properties for: " .. item.Name)
+            end
+        end
+    else
+        print("GModule not found in PlayerGui.")
+    end
+end
+
+-- Loop to continuously check and modify gun properties
+while shouldRun do
+    modifyGunProperties()
+    wait(1) -- Adjust the wait time as needed
+end
+
+-- Example of stopping the loop (could be triggered by an event or condition)
+-- shouldRun = false
