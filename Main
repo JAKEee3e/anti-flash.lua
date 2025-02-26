@@ -10,7 +10,7 @@ local features = {
     { name = "Skeleton ESP" },
     { name = "ESP" },
     { name = "Radar" },
-     { name = "Radar" },
+    { name = "No-recoil" },
     { name = "Aimbot" }
 }
 
@@ -134,6 +134,12 @@ UserInputService.InputBegan:Connect(function(input)
                 "Radar"
             )
         elseif selectedFeatureIndex == 5 and featureStates[5] then
+            -- Aimbot script
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
+                "Aimbot"
+            )
+     elseif selectedFeatureIndex == 5 and featureStates[5] then
             -- Aimbot script
             safeLoadstring(
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
