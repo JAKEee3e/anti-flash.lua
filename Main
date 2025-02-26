@@ -133,7 +133,7 @@ UserInputService.InputBegan:Connect(function(input)
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/radar",
                 "Radar"
             )
-        elseif selectedFeatureIndex == 5 and featureStates[5] then
+        elseif selectedFeatureIndex == 6 and featureStates[6] then
             -- Aimbot script
             safeLoadstring(
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
