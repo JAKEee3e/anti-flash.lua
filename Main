@@ -140,10 +140,10 @@ UserInputService.InputBegan:Connect(function(input)
                 "Aimbot"
             )
      elseif selectedFeatureIndex == 5 and featureStates[5] then
-            -- Aimbot script
+            -- No-recoil
             safeLoadstring(
-                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
-                "Aimbot"
+                "https://raw.github.com/JAKEee3e/anti-flash.lua/main/No-recoil",
+                "No-recoil"
             )
         end
         
