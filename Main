@@ -10,8 +10,8 @@ local features = {
     { name = "Skeleton ESP" },
     { name = "ESP" },
     { name = "Radar" },
-    { name = "Aimbot" },
-    { name = "No-recoil" }
+    { name = "No-recoil" },
+    { name = "Aimbot" }
     
 }
 
