@@ -13,7 +13,7 @@ local AimbotSettings = {
     FOV = 100,
     MinFOV = 50,
     MaxFOV = 150,
-    PredictionMultiplier = 0,
+    PredictionMultiplier = 1.0,
     MaxDistance = 1000,
 }
 
