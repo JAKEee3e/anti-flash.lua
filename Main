@@ -10,8 +10,9 @@ local features = {
     { name = "Skeleton ESP" },
     { name = "ESP" },
     { name = "Radar" },
-    { name = "No-recoil" },
-    { name = "Aimbot" }
+    { name = "Aimbot" },
+    { name = "No-recoil" }
+    
 }
 
 local selectedFeatureIndex = 1
