@@ -11,7 +11,8 @@ local features = {
     { name = "ESP" },
     { name = "Radar" },
     { name = "No-recoil" },
-    { name = "Aimbot" }
+    { name = "Aimbot" },
+    { name = "Aimbot V2" }
     
 }
 
@@ -142,6 +143,11 @@ UserInputService.InputBegan:Connect(function(input)
             )
      elseif selectedFeatureIndex == 6 and featureStates[6] then
             -- No-recoil
+            safeLoadstring(
+                "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
+                "No-recoil"
+            )
+             -- No-recoil
             safeLoadstring(
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
                 "No-recoil"
