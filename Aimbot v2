@@ -1,0 +1,226 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local Aimbot = {
+    Enabled = false,
+    TargetPart = "Head",
+    TeamCheck = false,
+    FOV = 200,
+    SmoothingFactor = 1.0,
+    TargetPriority = "Distance", -- "Distance" or "Health"
+    VisibilityCheck = true,
+    MaxDistance = 1000,
+    TargetParts = {"Head"}, -- Will try in order
+    FOVSettings = {
+        Color = Color3.fromRGB(255, 0, 0),
+        Rainbow = true,
+        Opacity = 0.5
+    },
+    Prediction = {
+        Enabled = true,
+        Velocity = 1000, -- Bullet velocity
+        Gravity = workspace.Gravity
+    },
+    AimMode = "Regular", -- "Regular", "Silent", "Mouse"
+    Keybinds = {
+        Toggle = Enum.KeyCode.X,
+        FOVToggle = Enum.KeyCode.F,
+        LockTarget = Enum.KeyCode.L
+    },
+    LockedTarget = nil,
+    Memory = {
+        LastPositions = {}, -- Store last positions for prediction
+        ClearInterval = 5 -- Clear memory every 5 seconds
+    }
+}
+
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 100
+FOVCircle.Radius = Aimbot.FOV
+FOVCircle.Filled = false
+FOVCircle.Visible = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+
+-- Add rainbow effect function
+local function UpdateFOVCircle()
+    if Aimbot.FOVSettings.Rainbow then
+        local hue = tick() % 5 / 5
+        FOVCircle.Color = Color3.fromHSV(hue, 1, 1)
+    else
+        FOVCircle.Color = Aimbot.FOVSettings.Color
+    end
+    FOVCircle.Transparency = 1 - Aimbot.FOVSettings.Opacity
+end
+
+function Aimbot:GetClosestPlayer()
+    local MaxDistance = math.huge
+    local Target = nil
+
+    local MousePos = UserInputService:GetMouseLocation()
+
+    for _, Player in pairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer then
+            if self.TeamCheck and Player.Team == LocalPlayer.Team then
+                continue
+            end
+            
+            if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+                local Humanoid = Player.Character.Humanoid
+                if Humanoid.Health <= 0 then continue end
+                
+                -- Try each target part in order
+                for _, PartName in ipairs(self.TargetParts) do
+                    local TargetPart = Player.Character:FindFirstChild(PartName)
+                    if not TargetPart then continue end
+                    
+                    -- Visibility check
+                    if self.VisibilityCheck then
+                        local ray = Ray.new(Camera.CFrame.Position, (TargetPart.Position - Camera.CFrame.Position).Unit * self.MaxDistance)
+                        local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character, Camera})
+                        if hit and hit:IsDescendantOf(Player.Character) == false then
+                            continue
+                        end
+                    end
+                    
+                    -- Distance check and priority
+                    local ScreenPoint, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+                    if OnScreen then
+                        local Distance = (Vector2.new(ScreenPoint.X, ScreenPoint.Y) - MousePos).Magnitude
+                        if Distance < self.FOV then
+                            if self.TargetPriority == "Health" then
+                                Distance = Distance * (100 / Humanoid.Health) -- Prioritize lower health
+                            end
+                            if Distance < MaxDistance then
+                                MaxDistance = Distance
+                                Target = TargetPart
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return Target
+end
+
+-- Add prediction calculation
+function Aimbot:PredictPosition(target)
+    if not self.Prediction.Enabled then return target.Position end
+    
+    local targetVelocity = self.Memory.LastPositions[target] and 
+        (target.Position - self.Memory.LastPositions[target].pos) / 
+        (tick() - self.Memory.LastPositions[target].time) or 
+        Vector3.new()
+    
+    local timeToTarget = (target.Position - Camera.CFrame.Position).Magnitude / self.Prediction.Velocity
+    local predPos = target.Position + (targetVelocity * timeToTarget)
+    local gravityOffset = Vector3.new(0, -0.5 * self.Prediction.Gravity * timeToTarget^2, 0)
+    
+    return predPos + gravityOffset
+end
+
+-- Memory management
+function Aimbot:UpdateMemory(target)
+    self.Memory.LastPositions[target] = {
+        pos = target.Position,
+        time = tick()
+    }
+end
+
+function Aimbot:ClearOldMemory()
+    local currentTime = tick()
+    for target, data in pairs(self.Memory.LastPositions) do
+        if currentTime - data.time > self.Memory.ClearInterval then
+            self.Memory.LastPositions[target] = nil
+        end
+    end
+end
+
+-- Modified update function
+function Aimbot:Update()
+    UpdateFOVCircle()
+    FOVCircle.Position = UserInputService:GetMouseLocation()
+    FOVCircle.Visible = true
+
+    if self.Enabled then
+        local Target = self.LockedTarget or self:GetClosestPlayer()
+        
+        if Target then
+            self:UpdateMemory(Target)
+            local TargetPos = self:PredictPosition(Target)
+            
+            if self.AimMode == "Silent" then
+                return TargetPos -- For silent aim implementation
+            elseif self.AimMode == "Mouse" then
+                -- Move mouse instead of camera
+                local targetScreen = Camera:WorldToViewportPoint(TargetPos)
+                mousemoverel(targetScreen.X - UserInputService:GetMouseLocation().X,
+                           targetScreen.Y - UserInputService:GetMouseLocation().Y)
+            else
+                local CurrentCFrame = Camera.CFrame
+                local TargetCFrame = CFrame.lookAt(Camera.CFrame.Position, TargetPos)
+                Camera.CFrame = CurrentCFrame:Lerp(TargetCFrame, self.SmoothingFactor)
+            end
+        end
+    end
+    
+    self:ClearOldMemory()
+end
+
+-- Modified input handling
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Aimbot.Keybinds.Toggle then
+        Aimbot.Enabled = not Aimbot.Enabled
+    elseif input.KeyCode == Aimbot.Keybinds.FOVToggle then
+        FOVCircle.Visible = not FOVCircle.Visible
+    elseif input.KeyCode == Aimbot.Keybinds.LockTarget then
+        if Aimbot.LockedTarget then
+            Aimbot.LockedTarget = nil
+        else
+            Aimbot.LockedTarget = Aimbot:GetClosestPlayer()
+        end
+    end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        Aimbot.Enabled = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        Aimbot.Enabled = false
+    end
+end)
+
+-- Clear previous connections if they exist
+if Aimbot.RenderSteppedConnection then
+    Aimbot.RenderSteppedConnection:Disconnect()
+end
+
+-- Set up the render stepped connection with high priority
+Aimbot.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
+    local success, err = pcall(function()
+        Aimbot:Update()
+    end)
+    
+    if not success then
+        warn("Aimbot Error: " .. tostring(err))
+    end
+end)
+
+-- Cleanup function
+function Aimbot:Destroy()
+    if self.RenderSteppedConnection then
+        self.RenderSteppedConnection:Disconnect()
+    end
+    FOVCircle:Remove()
+    self.Memory.LastPositions = {}
+    self.LockedTarget = nil
+end
+
+return Aimbot
