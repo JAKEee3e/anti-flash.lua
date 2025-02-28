@@ -2,23 +2,35 @@
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Variables
 local features = {
-    { name = "Anti-Flash" },
-    { name = "Skeleton ESP" },
-    { name = "ESP" },
-    { name = "Radar" },
-    { name = "No-recoil" },
-    { name = "Aimbot" },
-    { name = "Aimbot V2" }
-    
+    { name = "Anti-Flash", icon = "🛡️" },
+    { name = "Skeleton ESP", icon = "💀" },
+    { name = "ESP", icon = "👁️" },
+    { name = "Radar", icon = "🎯" },
+    { name = "No-recoil", icon = "🎮" },
+    { name = "Aimbot", icon = "🎯" },
+    { name = "Aimbot V2", icon = "✨" }
 }
 
 local selectedFeatureIndex = 1
 local guiVisible = true
 local featureStates = {}
+
+-- Theme Colors
+local THEME = {
+    background = Color3.fromRGB(25, 25, 35),
+    accent = Color3.fromRGB(65, 105, 225),
+    text = Color3.fromRGB(255, 255, 255),
+    secondary = Color3.fromRGB(40, 40, 50),
+    enabled = Color3.fromRGB(72, 199, 142),
+    disabled = Color3.fromRGB(255, 255, 255),
+    hover = Color3.fromRGB(75, 115, 235)
+}
 
 -- Initialize feature states
 for i = 1, #features do
@@ -34,76 +46,211 @@ local featureLabels = {}
 screenGui.Name = "FeatureMenu"
 screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 
+-- Create a container for drop shadow
+local shadowContainer = Instance.new("Frame")
+shadowContainer.Name = "ShadowContainer"
+shadowContainer.Size = UDim2.new(0.14, 0, 0.3, 0)
+shadowContainer.Position = UDim2.new(0.425, 0, 0.35, 0)
+shadowContainer.BackgroundTransparency = 1
+shadowContainer.Parent = screenGui
+
+-- Create drop shadow
+local shadow = Instance.new("ImageLabel")
+shadow.Name = "Shadow"
+shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+shadow.BackgroundTransparency = 1
+shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+shadow.Size = UDim2.new(1, 30, 1, 30)
+shadow.Image = "rbxassetid://6014261993"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.5
+shadow.Parent = shadowContainer
+
 frame.Name = "MainFrame"
-frame.Size = UDim2.new(0.12, 0, 0.25, 0)
-frame.Position = UDim2.new(0.425, 0, 0.375, 0)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BorderSizePixel = 2
-frame.BorderColor3 = Color3.fromRGB(60, 60, 60)
+frame.Size = UDim2.new(0.14, 0, 0.3, 0)
+frame.Position = UDim2.new(0.425, 0, 0.35, 0)
+frame.BackgroundColor3 = THEME.background
+frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
 frame.Parent = screenGui
 
--- Create title label
+-- Add corner radius
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+-- Create title label with modern design
+local titleContainer = Instance.new("Frame")
+titleContainer.Size = UDim2.new(1, 0, 0.15, 0)
+titleContainer.Position = UDim2.new(0, 0, 0, 0)
+titleContainer.BackgroundColor3 = THEME.accent
+titleContainer.BorderSizePixel = 0
+titleContainer.Parent = frame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleContainer
+
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
-titleLabel.Position = UDim2.new(0, 0, -0.15, 0)
-titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Text = "Feature Menu"
-titleLabel.TextSize = 16
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.Parent = frame
+titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = THEME.text
+titleLabel.Text = "🎮 Feature Menu"
+titleLabel.TextSize = 18
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = titleContainer
 
--- Create feature labels
+-- Create scrolling container for features
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Size = UDim2.new(1, -10, 0.85, -10)
+scrollingFrame.Position = UDim2.new(0, 5, 0.15, 5)
+scrollingFrame.BackgroundTransparency = 1
+scrollingFrame.BorderSizePixel = 0
+scrollingFrame.ScrollBarThickness = 4
+scrollingFrame.ScrollBarImageColor3 = THEME.accent
+scrollingFrame.Parent = frame
+
+-- Create feature buttons
 for i, feature in ipairs(features) do
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0.15, 0)
-    label.Position = UDim2.new(0, 0, (i-1) * 0.2, 0)
-    label.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Text = feature.name
-    label.TextSize = 14
-    label.Font = Enum.Font.SourceSans
-    label.Parent = frame
-    table.insert(featureLabels, label)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -10, 0, 35)
+    button.Position = UDim2.new(0, 5, 0, (i-1) * 40)
+    button.BackgroundColor3 = THEME.secondary
+    button.TextColor3 = THEME.text
+    button.Text = feature.icon .. " " .. feature.name
+    button.TextSize = 14
+    button.Font = Enum.Font.GothamSemibold
+    button.Parent = scrollingFrame
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = button
+    
+    -- Add hover effect
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = THEME.hover
+        }):Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = THEME.secondary
+        }):Play()
+    end)
+    
+    table.insert(featureLabels, button)
 end
 
--- Functions
-local function updateSelection()
-    for i, label in ipairs(featureLabels) do
-        label.BackgroundColor3 = i == selectedFeatureIndex and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(45, 45, 45)
-        label.TextColor3 = featureStates[i] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
-    end
-end
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #features * 40 + 5)
 
-local function toggleGuiVisibility()
-    guiVisible = not guiVisible
-    screenGui.Enabled = guiVisible
-end
-
--- Error Handler
+-- Error Handler and Script Loader
 local function safeLoadstring(url, featureName)
     local success, result = pcall(function()
         return game:HttpGet(url)
     end)
     
     if success then
-        local loadSuccess, loadResult = pcall(loadstring, result)
-        if loadSuccess and loadResult then
-            pcall(loadResult)
+        local loadSuccess, loadedScript = pcall(loadstring, result)
+        if loadSuccess and loadedScript then
+            local runSuccess, errorMsg = pcall(loadedScript)
+            if runSuccess then
+                StarterGui:SetCore("SendNotification", {
+                    Title = "✅ " .. featureName,
+                    Text = "Successfully loaded!",
+                    Duration = 3
+                })
+            else
+                StarterGui:SetCore("SendNotification", {
+                    Title = "❌ " .. featureName,
+                    Text = "Error running script: " .. tostring(errorMsg),
+                    Duration = 3
+                })
+                warn("Error running " .. featureName .. ": " .. tostring(errorMsg))
+            end
         else
-            warn(string.format("Failed to load %s script: %s", featureName, tostring(loadResult)))
+            StarterGui:SetCore("SendNotification", {
+                Title = "❌ " .. featureName,
+                Text = "Failed to load script",
+                Duration = 3
+            })
+            warn("Failed to load " .. featureName .. " script")
         end
     else
-        warn(string.format("Failed to fetch %s script: %s", featureName, tostring(result)))
+        StarterGui:SetCore("SendNotification", {
+            Title = "❌ " .. featureName,
+            Text = "Failed to fetch script",
+            Duration = 3
+        })
+        warn("Failed to fetch " .. featureName .. " script: " .. tostring(result))
     end
 end
 
+-- Functions
+local function updateSelection()
+    for i, button in ipairs(featureLabels) do
+        local isSelected = i == selectedFeatureIndex
+        local isEnabled = featureStates[i]
+        
+        -- Add arrow indicator for selected item
+        button.Text = (isSelected and "➡️ " or "   ") .. features[i].icon .. " " .. features[i].name
+        
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = isSelected and THEME.accent or THEME.secondary,
+            TextColor3 = isEnabled and THEME.enabled or THEME.disabled
+        }):Play()
+        
+        -- Show status indicator
+        if isEnabled then
+            button.Text = button.Text .. " ✅"
+        end
+    end
+end
+
+local function toggleGuiVisibility()
+    guiVisible = not guiVisible
+    local targetPosition = guiVisible and UDim2.new(0.425, 0, 0.35, 0) or UDim2.new(0.425, 0, -0.5, 0)
+    
+    TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
+        Position = targetPosition
+    }):Play()
+    
+    TweenService:Create(shadowContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
+        Position = targetPosition
+    }):Play()
+end
+
+-- Instructions Label
+local instructionsLabel = Instance.new("TextLabel")
+instructionsLabel.Size = UDim2.new(1, 0, 0, 30)
+instructionsLabel.Position = UDim2.new(0, 0, 1, 5)
+instructionsLabel.BackgroundColor3 = THEME.accent
+instructionsLabel.TextColor3 = THEME.text
+instructionsLabel.Text = "⌨️ ←/→ or ↑/↓: Select | ⏎ Enter: Toggle | ⇧ RShift: Hide"
+instructionsLabel.TextSize = 12
+instructionsLabel.Font = Enum.Font.GothamMedium
+instructionsLabel.Parent = frame
+
+local instructionsCorner = Instance.new("UICorner")
+instructionsCorner.CornerRadius = UDim.new(0, 6)
+instructionsCorner.Parent = instructionsLabel
+
+-- Initial update
+updateSelection()
+
+-- Welcome message with custom icon
+StarterGui:SetCore("SendNotification", {
+    Title = "✨ Menu Loaded",
+    Text = "Use Up/Down to select, Enter to toggle, RShift to hide",
+    Duration = 5
+})
+
 -- Input Handlers
 UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Up then
+    if input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.Left then
         selectedFeatureIndex = (selectedFeatureIndex - 2) % #features + 1
         updateSelection()
-    elseif input.KeyCode == Enum.KeyCode.Down then
+    elseif input.KeyCode == Enum.KeyCode.Down or input.KeyCode == Enum.KeyCode.Right then
         selectedFeatureIndex = selectedFeatureIndex % #features + 1
         updateSelection()
     elseif input.KeyCode == Enum.KeyCode.Return then
@@ -124,59 +271,37 @@ UserInputService.InputBegan:Connect(function(input)
                 "Skeleton ESP"
             )
         elseif selectedFeatureIndex == 3 and featureStates[3] then
-            -- No Flash Bang script
+            -- ESP script
             safeLoadstring(
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/esP",
                 "ESP"
             )
         elseif selectedFeatureIndex == 4 and featureStates[4] then
-            -- No Recoil script
+            -- Radar script
             safeLoadstring(
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/radar",
                 "Radar"
             )
         elseif selectedFeatureIndex == 5 and featureStates[5] then
-            -- Aimbot script
+            -- No-recoil script
             safeLoadstring(
                 "https://raw.github.com/JAKEee3e/anti-flash.lua/main/No-recoil",
-                "Aimbot"
+                "No-recoil"
             )
-     elseif selectedFeatureIndex == 6 and featureStates[6] then
-            -- No-recoil
+        elseif selectedFeatureIndex == 6 and featureStates[6] then
+            -- Aimbot script
             safeLoadstring(
                 "https://raw.githubusercontent.com/JAKEee3e/anti-flash.lua/main/Aimbot",
-                "No-recoil"
+                "Aimbot"
             )
- elseif selectedFeatureIndex == 7 and featureStates[7] then
-             -- No-recoil
+        elseif selectedFeatureIndex == 7 and featureStates[7] then
+            -- Aimbot V2 script
             safeLoadstring(
                 "https://raw.github.com/JAKEee3e/anti-flash.lua/main/Aimbot%20v2",
-                "No-recoil"
+                "Aimbot V2"
             )
         end
-        
     elseif input.KeyCode == Enum.KeyCode.RightShift then
         toggleGuiVisibility()
     end
-end)
-
--- Instructions Label
-local instructionsLabel = Instance.new("TextLabel")
-instructionsLabel.Size = UDim2.new(1, 0, 0.15, 0)
-instructionsLabel.Position = UDim2.new(0, 0, 1.05, 0)
-instructionsLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-instructionsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-instructionsLabel.Text = "Up/Down: Select | Enter: Toggle | RShift: Hide"
-instructionsLabel.TextSize = 12
-instructionsLabel.Font = Enum.Font.SourceSans
-instructionsLabel.Parent = frame
-
--- Initial update
-updateSelection()
-
--- Welcome message
-StarterGui:SetCore("SendNotification", {
-    Title = "Menu Loaded",
-    Text = "Use Up/Down to select, Enter to toggle, RShift to hide",
-    Duration = 5
-})
+end) 
